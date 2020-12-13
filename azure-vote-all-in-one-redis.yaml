@@ -17,7 +17,7 @@ stages:
 
 - stage: Docker
   dependsOn: ''
-  condition: and(succeeded('Tests'), or(eq(variables.isReleaseBranch, true), eq(variables.isMasterBranch, true)))
+  condition: and((eq(variables.isReleaseBranch, true), eq(variables.isMasterBranch, true)))
   jobs:
   - job: ImagePush
     displayName: Build and push docker images
