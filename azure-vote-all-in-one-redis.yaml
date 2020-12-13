@@ -1,81 +1,58 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: azure-vote-back
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: azure-vote-back
-  template:
-    metadata:
-      labels:
-        app: azure-vote-back
-    spec:
-      nodeSelector:
-        "beta.kubernetes.io/os": linux
-      containers:
-      - name: azure-vote-back
-        image: mcr.microsoft.com/oss/bitnami/redis:6.0.8
+name: $(BuildDefinitionName)_CI_$(Year:yyyy).$(Month).$(DayOfMonth).$(Rev:r)
+trigger:
+- master
+- dev
+
+pool:
+  vmImage: ubuntu-16.04
+
+variables:
+  assemblyVersion:     '1.2.0' # assembly version needs to be incremented here
+  revision:            $[counter('simple-v1-revision', 0)]
+  isMasterBranch:      $[eq(variables['Build.SourceBranch'], 'refs/heads/master')]
+  
+  imageReference: 'demokcr.azurecr.io/simple'
+  
+stages:
+
+- stage: Docker
+  dependsOn: ''
+  condition: and(succeeded('Tests'), or(eq(variables.isReleaseBranch, true), eq(variables.isMasterBranch, true)))
+  jobs:
+  - job: ImagePush
+    displayName: Build and push docker images
+    steps:
+           
+      - pwsh: |
+           $splitVersion = '$(assemblyVersion).$(revision)'.Split(".")
+           $path = 'src\SimpleThing\SharedAssemblyInfo.cs'
+           $pattern = '\[assembly: AssemblyVersion\("(.*)"\)\]'
+           (Get-Content $path) | ForEach-Object{
+              if($_ -match $pattern){
+                $assemblyVersion = "{0}.{1}.{2}.{3}" -f $splitVersion[0], $splitVersion[1], $splitVersion[2], $splitVersion[3]
+                '[assembly: AssemblyVersion("{0}")]' -f $assemblyVersion
+              } else {
+                # Output line as is
+                $_
+              }
+           } | Set-Content $path -Force
+   
+           Write-Host $assemblyVersion
+        displayName: Set assembly version
+      - task: CmdLine@2
+        displayName: Build and push docker images
         env:
-        - name: ALLOW_EMPTY_PASSWORD
-          value: "yes"
-        ports:
-        - containerPort: 6379
-          name: redis
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: azure-vote-back
-spec:
-  ports:
-  - port: 6379
-  selector:
-    app: azure-vote-back
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: azure-vote-front
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: azure-vote-front
-  strategy:
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 1
-  minReadySeconds: 5 
-  template:
-    metadata:
-      labels:
-        app: azure-vote-front
-    spec:
-      nodeSelector:
-        "beta.kubernetes.io/os": linux
-      containers:
-      - name: azure-vote-front
-        image: mcr.microsoft.com/azuredocs/azure-vote-front:v1
-        ports:
-        - containerPort: 80
-        resources:
-          requests:
-            cpu: 250m
-          limits:
-            cpu: 500m
-        env:
-        - name: REDIS
-          value: "azure-vote-back"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: azure-vote-front
-spec:
-  type: LoadBalancer
-  ports:
-  - port: 80
-  selector:
-    app: azure-vote-front
+          PACKAGE_VERSION: $(assemblyVersion).$(revision)
+          LOGIN_USERNAME: 'DemoKcr'
+          LOGIN_PASSWORD: 'y9ytfhh7US5Oa7Ta6nyfg=pbyOeQ/mEe'
+          LOGIN_HOSTNAME: 'demokcr.azurecr.io'
+        inputs:
+          workingDirectory: 'src'
+          failOnStderr: false
+          script: |
+            :: push cds image
+            TAGGED_IMAGE="$LOGIN_HOSTNAME/simple:$PACKAGE_VERSION"
+            echo "$LOGIN_PASSWORD" | docker login --username $LOGIN_USERNAME --password-stdin $LOGIN_HOSTNAME
+            docker build -t $TAGGED_IMAGE -f \azure-vote/Dockerfile .
+            docker push $TAGGED_IMAGE
+            docker rmi $TAGGED_IMAGE
