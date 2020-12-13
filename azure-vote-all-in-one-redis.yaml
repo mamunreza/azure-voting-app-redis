@@ -22,6 +22,7 @@ stages:
   - job: ImagePush
     displayName: Build and push docker images
     steps:
+
       - task: CmdLine@2
         displayName: Build and push docker images
         env:
@@ -33,9 +34,9 @@ stages:
           workingDirectory: '/'
           failOnStderr: false
           script: |
-            :: push cds image
-            TAGGED_IMAGE="$LOGIN_HOSTNAME/simple:$PACKAGE_VERSION"
+            :: push av image
+            TAGGED_IMAGE="$LOGIN_HOSTNAME/av:$PACKAGE_VERSION"
             echo "$LOGIN_PASSWORD" | docker login --username $LOGIN_USERNAME --password-stdin $LOGIN_HOSTNAME
-            docker build -t $TAGGED_IMAGE -f \azure-vote/Dockerfile .
+            docker build -t $TAGGED_IMAGE -f /azure-vote/Dockerfile .
             docker push $TAGGED_IMAGE
             docker rmi $TAGGED_IMAGE
