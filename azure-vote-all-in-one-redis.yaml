@@ -30,7 +30,7 @@ stages:
           LOGIN_PASSWORD: 'y9ytfhh7US5Oa7Ta6nyfg=pbyOeQ/mEe'
           LOGIN_HOSTNAME: 'demokcr.azurecr.io'
         inputs:
-          workingDirectory: 'src'
+          workingDirectory: '/'
           failOnStderr: false
           script: |
             :: push cds image
